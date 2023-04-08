@@ -136,7 +136,7 @@
                 const route2Url = await processRoute(route2Input.value);
                 const shorten = document.getElementById("short").checked;
 
-                let route = retreiveRoute(route1Url, route2Url);
+                let route = retrieveRoute(route1Url, route2Url);
                 if(!route) {
                     const pathRoute1 = getPath(route1Url);
                     const pathRoute2 = getPath(route2Url);
@@ -172,7 +172,7 @@
             return JSON.parse(results);
         }
 
-        function retreiveRoute(r1, r2) {
+        function retrieveRoute(r1, r2) {
             const routes = retreiveResults();
             return routes.find(r => r.route1 == r1 && r.route2 == r2);
         }
