@@ -21,9 +21,16 @@
         
         .grid {
             display: grid;
-            grid-template-columns: 1fr;
-            grid-gap: 0.5em 0;
+            grid-gap: 0.5em 0.5em;
             align-items: center;
+        }
+
+        .one-column {
+            grid-template-columns: 1fr;
+        }
+
+        .two-column {
+            grid-template-columns: 1fr 1fr;
         }
 
         button {
@@ -34,8 +41,8 @@
             margin: 0;
             padding: 0 2em;
             cursor: pointer;
-            width: 100%;
             margin-top: 1em;
+            width: 100%;
         }
 
         #result {
@@ -48,8 +55,8 @@
         }
 
         textarea {
-            width: 100%;
             max-width: 100%;
+            resize: vertical;
         }
 
         #error-message {
@@ -57,38 +64,21 @@
         }
     </style>
     <script type="module">
-        const form = document.getElementsByClassName("combine-form")[0];
-        const route1Input = document.getElementById("route1");
-        const route2Input = document.getElementById("route2");
-
         const rapidApiKey = "d59103dcecmshaedf659e4a3fcffp1538a1jsn47a085a0e6be";
+        const resultsKey = "results";
+        const route1Key = "route1";
+        const route2Key = "route2";
+
+        const form = document.getElementsByClassName("combine-form")[0];
+        const route1Input = document.getElementById(route1Key);
+        const route2Input = document.getElementById(route2Key);
 
         document.addEventListener("DOMContentLoaded", async (event) => {
-            form.addEventListener("submit", async (e) => {
+            initForm();
+
+            form.addEventListener("submit", (e) => {
                 e.preventDefault();
-
-                setErrorMessage();
-                const result = document.getElementById("result");
-                toggleVisibility(result);
-                const submitButton = form.querySelector("button[type='submit']");
-                submitButton.disabled = true;
-
-                try { 
-                    const route1Url = await processRoute(route1Input.value);
-                    const route2Url = await processRoute(route2Input.value);
-
-                    let processedUrl = combineRoutes(route1Url, route2Url);
-                    if(document.getElementById("short").checked) {
-                        processedUrl = await shortenUrl(processedUrl)
-                    }
-                    toggleVisibility(result, true);
-                    setTextareaValue(document.getElementById("combined-url"), processedUrl);
-                    document.getElementById("collapse").dispatchEvent(new Event("click"));
-                } catch(error) {
-                    console.log(error);
-                    setErrorMessage("Die eingegeben Routen können nicht verarbeitet werden!");
-                }
-                submitButton.disabled = false;
+                onsubmit();
             });
 
             document.getElementById("reset").addEventListener("click", (e) => {
@@ -122,16 +112,85 @@
             const textareas = document.getElementsByTagName("textarea");
             for(const t of textareas) {
                 t.addEventListener("input", (e) => {
+                    if(e.target === route1Input) {
+                        localStorage.setItem(route1Key, e.target.value);
+                    }
+                    if(e.target === route2Input) {
+                        localStorage.setItem(route2Key, e.target.value);
+                    }
                     t.style.height = "1px";
                     t.style.height = (25+t.scrollHeight)+"px";
                 });
             }
         });
 
-        function combineRoutes(route1, route2) {
-            const pathRoute1 = getPath(route1);
-            const pathRoute2 = getPath(route2);
+        async function onsubmit() {
+            setErrorMessage();
+            const result = document.getElementById("combined-url");
+            toggleVisibility(result.parentElement);
+            const submitButton = form.querySelector("button[type='submit']");
+            submitButton.disabled = true;
 
+            try { 
+                const route1Url = await processRoute(route1Input.value);
+                const route2Url = await processRoute(route2Input.value);
+                const shorten = document.getElementById("short").checked;
+
+                let route = retreiveRoute(route1Url, route2Url);
+                if(!route) {
+                    const pathRoute1 = getPath(route1Url);
+                    const pathRoute2 = getPath(route2Url);
+                    const combinedUrl = combinePathsToRoute(pathRoute1, pathRoute2);
+                    route = { route1: route1Url, route2: route2Url, result: combinedUrl };
+                    storeRoute(route);
+                }
+
+                if(shorten) {
+                    route.result = await shortenUrl(route.result);
+                }
+
+                renderResult(result, route.result);
+            } catch(error) {
+                console.log(error);
+                setErrorMessage("Die eingegeben Routen können nicht verarbeitet werden!");
+            }
+            submitButton.disabled = false;
+        }
+
+        function storeUrl(short, long) {
+            localStorage.setItem(short, long);
+            localStorage.setItem(long, short);
+        }
+
+        function retreiveUrl(url) {
+            return localStorage.getItem(url);
+        }
+
+        function retreiveResults() {
+            const results = localStorage.getItem(resultsKey);
+            if(!results || results.length < 1) return [];
+            return JSON.parse(results);
+        }
+
+        function retreiveRoute(r1, r2) {
+            const routes = retreiveResults();
+            return routes.find(r => r.route1 == r1 && r.route2 == r2);
+        }
+
+        function storeRoute(route) {
+            const results = retreiveResults();
+            const storedRoute = retrieveRoute(route.route1, route.route2);
+            results.push(route);
+            localStorage.setItem(resultsKey, JSON.stringify(results));
+        }
+
+        function renderResult(result, url) {
+            toggleVisibility(result.parentElement, true);
+            setTextareaValue(result, url);
+            document.getElementById("collapse").dispatchEvent(new Event("click"));
+        }
+
+        function combinePathsToRoute(pathRoute1, pathRoute2) {
             const path = [...pathRoute1, ...pathRoute2];
             return `https://www.google.com/maps/dir/${path.join("/")}`;
         }
@@ -156,6 +215,11 @@
             return path;
         }
 
+        function initForm() {
+            route1Input.value = localStorage.getItem(route1Key);
+            route2Input.value = localStorage.getItem(route2Key);
+        }
+
         function resetForm() {
             setTextareaValue(route1Input, "");
             setTextareaValue(route2Input, "");
@@ -171,6 +235,9 @@
         }
 
         async function unshortenUrl(url) {
+            const cache = retreiveUrl(url);
+            if(cache) return cache;
+
             const encodedParams = new URLSearchParams();
             encodedParams.append("url", url);
 
@@ -188,10 +255,14 @@
             if(response.status !== 200) {
                 throw `Ein Fehler beim Prüfen des Links ist aufgetreten, versuche es erneut oder verwende den vollen Link.\n [${JSON.stringify(json)}]`;
             }
+            storeUrl(url, json.longUrl);
             return json.longUrl;
         }
 
         async function shortenUrl(url) {
+            const cache = retreiveUrl(url);
+            if(cache) return cache;
+
             const encodedParams = new URLSearchParams();
             encodedParams.append("url", url);
 
@@ -214,6 +285,7 @@
                 if(response.status !== 200) {
                     throw `Ein Fehler beim Kürzen des Links ist aufgetreten, versuche es erneut oder verwende den vollen Link.\n [${JSON.stringify(json)}]`;
                 }
+                storeUrl(url, json.short_url);
                 return json.short_url;
             } catch(error) {
                 setErrorMessage(error);
@@ -235,7 +307,11 @@
 
         function toggleVisibility(element, show = false) {
             if(show) {
-                element.style = "display: block";
+                if(element.classList.contains("grid")) {
+                    element.style = "display: grid;";
+                } else {
+                    element.style = "display: block;";
+                }
                 return;
             }
             element.style = "display: none";
@@ -262,7 +338,7 @@
 
   <main>
     <form class="combine-form">
-        <div class="grid">
+        <div class="grid one-column">
             <label for="route1">Route 1</label>
             <textarea type="text" id="route1" name="route1" required></textarea>
 
@@ -272,23 +348,27 @@
             <label for="scales">Link kürzen</label>
             <input type="checkbox" id="short" name="short" checked>
         </div>
-
-        <button type="submit">Kombinieren</button>
-        <button type="button" id="reset">Zurücksetzen</button>
+        <div class="grid two-column">
+            <button type="submit">Kombinieren</button>
+            <button type="button" id="reset">Zurücksetzen</button>
+        </div>
     </form>
+
     <button type="button" id="collapse">Eingabe Zuklappen</button>
     <button type="button" id="expand"style="display: none;">Eingabe Aufklappen</button>
 
-    <div style="display: none;">
-        <label for="combined-url">Fehlermeldung</label>
+    <div class="grid one-column" style="display: none;">
+        <label for="error-message">Fehlermeldung</label>
         <textarea type="text" id="error-message" name="error-message" readonly></textarea>
     </div>
 
-    <article id="result" style="display: none;">
+    <article id="result" class ="grid one-column" style="display: none;">
         <label for="combined-url">Link</label>
         <textarea type="text" id="combined-url" name="combined-url" readonly></textarea>
-        <button type="button" id="copy">Kopieren</button>
-        <button type="button" id="open">Öffnen</button>
+        <div class="grid two-column">
+            <button type="button" id="copy">Kopieren</button>
+            <button type="button" id="open">Öffnen</button>
+        </div>
     </article>
   </main>
 </body>
