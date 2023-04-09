@@ -62,8 +62,15 @@
         #error-message {
             color: red;
         }
+
+        .version {
+            text-align: right;
+            font-size: 0.75em;
+            color: gray;
+        }
     </style>
     <script type="module">
+        const versionDateTime = "09.04.2023 12:55";
         const rapidApiKey = "d59103dcecmshaedf659e4a3fcffp1538a1jsn47a085a0e6be";
         const resultsKey = "results";
         const route1Key = "route1";
@@ -75,6 +82,7 @@
 
         document.addEventListener("DOMContentLoaded", async (event) => {
             initForm();
+            document.querySelector("footer .version").textContent = `Version: ${versionDateTime}`;
 
             form.addEventListener("submit", (e) => {
                 e.preventDefault();
@@ -190,9 +198,18 @@
             document.getElementById("collapse").dispatchEvent(new Event("click"));
         }
 
+        function createUrl(path) {
+            return `https://www.google.com/maps/dir/${path.join("/")}`;
+
+            // const start = path[0];
+            // const destination = path[path.length - 1];
+            // const waypoints = path.filter((p, i) => i !== 0 && i !== path.length - 1);
+            // return `https://www.google.com/maps/dir/?api=1&origin=${start}&destination=${destination}&waypoints=via:${waypoints.join("|via:")}`;
+        }
+
         function combinePathsToRoute(pathRoute1, pathRoute2) {
             const path = [...pathRoute1, ...pathRoute2];
-            return `https://www.google.com/maps/dir/${path.join("/")}`;
+            return createUrl(path);
         }
 
         function getPath(routeUrl) {
@@ -275,7 +292,7 @@
                 },
                 body: JSON.stringify({
                     url: url,
-                    aliar: "googlemaps"
+                    alias: `maps-${(new Date()).toISOString()}`
                 })
             };
 
@@ -371,6 +388,10 @@
         </div>
     </article>
   </main>
+
+  <footer>
+    <p class="version"></p>
+  </footer>
 </body>
 
 </html>
